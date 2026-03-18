@@ -247,52 +247,32 @@ if "Upload" in input_mode:
 
 # ── Webcam mode ───────────────────────────────────────────────────────────────
 else:
-    st.info("📷 Webcam mode: click **Start** to begin live detection.")
+    st.info("📷 Webcam mode — allow camera access when your browser asks.")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        start_cam = st.button("▶️ Start Webcam", use_container_width=True)
-    with col2:
-        stop_cam  = st.button("⏹️ Stop Webcam",  use_container_width=True)
+    pipeline = make_pipeline()
 
-    if stop_cam:
-        st.session_state.running = False
+    img_file = st.camera_input("Point your camera at the road")
 
-    if start_cam:
-        st.session_state.running  = True
-        st.session_state.pipeline = make_pipeline()
+    if img_file is not None:
+        from PIL import Image
+        import io
+        image = Image.open(io.BytesIO(img_file.getvalue()))
+        frame = np.array(image)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-    if st.session_state.running:
-        cap      = cv2.VideoCapture(0)
-        pipeline = st.session_state.pipeline
+        output = pipeline.process_frame(frame)
+        stats  = pipeline.get_stats()
 
-        if not cap.isOpened():
-            st.error("❌ Could not open webcam. Check device permissions.")
-            st.session_state.running = False
-        else:
-            frame_idx = 0
-            while st.session_state.running:
-                ret, frame = cap.read()
-                if not ret:
-                    st.warning("⚠️ Webcam frame lost.")
-                    break
+        rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        video_placeholder.image(rgb, channels="RGB", use_container_width=True)
 
-                frame_idx += 1
-                output = pipeline.process_frame(frame)
-                stats  = pipeline.get_stats()
+        update_sidebar(stats)
 
-                rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-                video_placeholder.image(rgb, channels="RGB", use_container_width=True)
-
-                update_sidebar(stats)
-
-                msg = stats["message"]
-                if not log_history or log_history[-1] != msg:
-                    log_history.append(msg)
-                    if len(log_history) > 12:
-                        log_history.pop(0)
-                decision_log.markdown(
-                    "\n\n".join([f"• {m}" for m in reversed(log_history)])
-                )
-
-            cap.release()
+        msg = stats["message"]
+        if not log_history or log_history[-1] != msg:
+            log_history.append(msg)
+            if len(log_history) > 12:
+                log_history.pop(0)
+        decision_log.markdown(
+            "\n\n".join([f"• {m}" for m in reversed(log_history)])
+        )
